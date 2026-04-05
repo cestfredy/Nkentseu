@@ -125,7 +125,7 @@ namespace memory {
             };
             
             PoolStats tiny;      // TINY pool
-            PoolStats small;     // SMALL pool
+            PoolStats smallPool;     // SMALL pool
             PoolStats medium;    // MEDIUM pool (variable)
             
             nk_size largeAllocations;  // Nombre allocations OS
