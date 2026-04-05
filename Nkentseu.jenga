@@ -89,47 +89,39 @@ with workspace("Nkentseu", location="."):
     dutc(enable=True)
     dute(enable=True)
 
-    # Nom du toolchain Windows clang-mingw
-    TC_WINDOWS = "nk-windows-clang-mingw"
+    # Nom du toolchain Windows clang-msvc (MODIFIÉ)
+    TC_WINDOWS = "nk-windows-clang-msvc"
 
-    # Enregistrement du toolchain Windows avec resolution explicite du compilateur
+    # Enregistrement du toolchain Windows avec MSVC (CORRIGÉ)
     if os.name == "nt":
         _clang = shutil.which("clang")
         _clangxx = shutil.which("clang++")
         _llvm_ar = shutil.which("llvm-ar") or shutil.which("ar")
-        if not _clang and os.path.exists(r"C:\msys64\ucrt64\bin\clang.exe"):
-            _clang = r"C:\msys64\ucrt64\bin\clang.exe"
-        if not _clangxx and os.path.exists(r"C:\msys64\ucrt64\bin\clang++.exe"):
-            _clangxx = r"C:\msys64\ucrt64\bin\clang++.exe"
-        if not _llvm_ar and os.path.exists(r"C:\msys64\ucrt64\bin\llvm-ar.exe"):
-            _llvm_ar = r"C:\msys64\ucrt64\bin\llvm-ar.exe"
-        if not _llvm_ar and os.path.exists(r"C:\msys64\ucrt64\bin\ar.exe"):
-            _llvm_ar = r"C:\msys64\ucrt64\bin\ar.exe"
 
         with toolchain(TC_WINDOWS, "clang"):
-            settarget("Windows", "x86_64", "mingw")
-            targettriple(r"x86_64-w64-windows-gnu")
-            ccompiler(_clang or "clang")
-            cppcompiler(_clangxx or "clang++")
-            linker(_clangxx or "clang++")
+            # ✅ PASSAGE EN MSVC
+            settarget("Windows", "x86_64", "msvc")
+            targettriple(r"x86_64-pc-windows-msvc")
+
+            # ✅ UTILISATION DE clang-cl
+            ccompiler("clang-cl")
+            cppcompiler("clang-cl")
+            linker("clang-cl")
+
             if _llvm_ar:
                 archiver(_llvm_ar)
+
+            # ✅ SUPPRESSION DES FLAGS GNU
             cflags([
-                "--target=x86_64-w64-windows-gnu",
                 "-DWINVER=0x0601",
                 "-D_WIN32_WINNT=0x0601",
             ])
             cxxflags([
-                "--target=x86_64-w64-windows-gnu",
                 "-DWINVER=0x0601",
                 "-D_WIN32_WINNT=0x0601",
             ])
-            ldflags(["--target=x86_64-w64-windows-gnu"])
 
     else:
-        # Cross-compilation Windows depuis Linux/WSL2:
-        # 1) Préfère llvm-mingw (clang/clang++).
-        # 2) Fallback MinGW GCC si clang n'est pas disponible.
         _mingw_clang   = shutil.which("x86_64-w64-mingw32-clang")
         _mingw_clangxx = shutil.which("x86_64-w64-mingw32-clang++")
         _mingw_gcc     = shutil.which("x86_64-w64-mingw32-gcc")
@@ -177,39 +169,30 @@ with workspace("Nkentseu", location="."):
 
     configurations(["Debug", "Release"])
 
-    # ===== Options Linux : choix du backend de fenetrage ========================
     newoption(
         trigger="linux-backend",
         value="BACKEND",
         allowed=[
-            ["xlib",     "X11/XLib  (defaut, le plus compatible)"],
-            ["xcb",      "X11/XCB   (plus leger, asynchrone)"],
-            ["wayland",  "Wayland   (compositeurs modernes, sans X11)"],
-            ["headless", "Pas de fenetre (CI, serveurs, WSL sans ecran)"],
+            ["xlib",     "X11/XLib"],
+            ["xcb",      "X11/XCB"],
+            ["wayland",  "Wayland"],
+            ["headless", "Headless"],
         ],
         default="xlib",
         description="Backend de fenetrage Linux"
     )
 
     newoption(
-        trigger="headless",
-        description="[Obsolete] Utiliser --options linux-backend=headless"
-    )
-
-    # ===== Option Windows : Desktop vs UWP ====================================
-    # Jenga v2.0.1 n'expose pas TargetOS.UWP; on route UWP via une option.
-    newoption(
         trigger="windows-runtime",
         value="RUNTIME",
         allowed=[
-            ["desktop", "Windows desktop classique (Win32)"],
-            ["uwp",     "Windows Runtime (UWP)"],
+            ["desktop", "Win32"],
+            ["uwp",     "UWP"],
         ],
         default="desktop",
-        description="Runtime Windows cible (desktop ou UWP)"
+        description="Runtime Windows"
     )
 
-    # ===== Plateformes et architectures cibles ==================================
     targetoses([
         TargetOS.WINDOWS,
         TargetOS.LINUX,
@@ -223,17 +206,13 @@ with workspace("Nkentseu", location="."):
     ])
 
     targetarchs([
-        TargetArch.X86_64,   # Desktop (Windows, Linux, macOS, Xbox)
-        TargetArch.ARM64,    # Mobile  (Android, iOS)
-        TargetArch.WASM32,   # Web     (Emscripten)
+        TargetArch.X86_64,
+        TargetArch.ARM64,
+        TargetArch.WASM32,
     ])
 
     emscriptenfullscreenshell(True)
 
-    # androidsdkpath(os.getenv("ANDROID_SDK_ROOT", ""))
-    # androidndkpath(os.getenv("ANDROID_NDK_ROOT", os.getenv("ANDROID_NDK_HOME", "")))
-
-    # ── Android SDK/NDK paths (from environment) ─────────────────────────
     androidsdkpath(os.getenv("ANDROID_SDK_ROOT", ""))
     androidndkpath(os.getenv("ANDROID_NDK_ROOT", ""))
 
@@ -242,58 +221,20 @@ with workspace("Nkentseu", location="."):
 
     startproject("Sandbox")
 
-    # =========================================================================
-    # Inclusion de chaque projet depuis son propre fichier .jenga
-    # L'ordre respecte la chaine de dependances.
-    # =========================================================================
-
-    with include("Modules/Foundation/NKPlatform/NKPlatform.jenga"):
-        pass
-
-    with include("Modules/Foundation/NKCore/NKCore.jenga"):
-        pass
-
-    with include("Modules/System/NKLogger/NKLogger.jenga"):
-        pass
-
-    with include("Modules/Foundation/NKMath/NKMath.jenga"):
-        pass
-
-    with include("Modules/Foundation/NKMemory/NKMemory.jenga"):
-        pass
-
-    with include("Modules/Foundation/NKContainers/NKContainers.jenga"):
-        pass
-
-    with include("Modules/System/NKTime/NKTime.jenga"):
-        pass
-
-    with include("Modules/System/NKStream/NKStream.jenga"):
-        pass
-
-    with include("Modules/System/NKThreading/NKThreading.jenga"):
-        pass
-
-    with include("Modules/System/NKFileSystem/NKFileSystem.jenga"):
-        pass
-
-    with include("Modules/System/NKReflection/NKReflection.jenga"):
-        pass
-
-    with include("Modules/System/NKSerialization/NKSerialization.jenga"):
-        pass
-
-    with include("Modules/Runtime/NKWindow/NKWindow.jenga"):
-        pass
-
-    with include("Externals/Libs/Glad/Glad.jenga"):
-        pass
-
-    with include("Modules/Runtime/NKRenderer/NKRenderer.jenga"):
-        pass
-
-    with include("Modules/Runtime/NKCamera/NKCamera.jenga"):
-        pass
-
-    with include("Applications/Sandbox/Sandbox.jenga"):
-        pass
+    with include("Modules/Foundation/NKPlatform/NKPlatform.jenga"): pass
+    with include("Modules/Foundation/NKCore/NKCore.jenga"): pass
+    with include("Modules/System/NKLogger/NKLogger.jenga"): pass
+    with include("Modules/Foundation/NKMath/NKMath.jenga"): pass
+    with include("Modules/Foundation/NKMemory/NKMemory.jenga"): pass
+    with include("Modules/Foundation/NKContainers/NKContainers.jenga"): pass
+    with include("Modules/System/NKTime/NKTime.jenga"): pass
+    with include("Modules/System/NKStream/NKStream.jenga"): pass
+    with include("Modules/System/NKThreading/NKThreading.jenga"): pass
+    with include("Modules/System/NKFileSystem/NKFileSystem.jenga"): pass
+    with include("Modules/System/NKReflection/NKReflection.jenga"): pass
+    with include("Modules/System/NKSerialization/NKSerialization.jenga"): pass
+    with include("Modules/Runtime/NKWindow/NKWindow.jenga"): pass
+    with include("Externals/Libs/Glad/Glad.jenga"): pass
+    with include("Modules/Runtime/NKRenderer/NKRenderer.jenga"): pass
+    with include("Modules/Runtime/NKCamera/NKCamera.jenga"): pass
+    with include("Applications/Sandbox/Sandbox.jenga"): pass
